@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Suhail Typing Exam</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #eaf1fb;
+}
+
+header {
+    background: linear-gradient(to right, #0b5ed7, #1e88e5);
+    color: white;
+    padding: 12px 16px;
+    font-size: 22px;
+    font-weight: bold;
+    position: relative;
+}
+
+#timer {
+    position: absolute;
+    right: 20px;
+    top: 14px;
+    font-size: 18px;
+}
+
+.container {
+    width: 760px;
+    margin: 20px auto;
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+select, textarea, button {
+    font-size: 14px;
+    padding: 6px;
+}
+
+button {
+    background: #0b5ed7;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.box {
+    border: 1px solid #bcd;
+    padding: 14px;
+    font-size: 18px;
+    line-height: 1.6;
+    height: 180px;
+    overflow: hidden; /* 🔴 NO SCROLL */
+}
+
+#paragraphBox span.current {
+    background: #cfe5ff;
+}
+
+#typingBox {
+    margin-top: 10px;
+    outline: none;
+    white-space: pre-wrap;
+}
+
+.wrong {
+    text-decoration: underline;
+    text-decoration-color: red;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+Suhail Typing Exam
+<span id="timer">Time: 00:00</span>
+</header>
+
+<div class="container">
+
+<div class="controls">
+    <select id="paraSelect"></select>
+    <select id="timeSelect">
+        <option value="2">2 Minutes</option>
+        <option value="5">5 Minutes</option>
+        <option value="10">10 Minutes</option>
+    </select>
+    <button onclick="startTest()">Start</button>
+</div>
+
+<textarea id="paraInput" placeholder="Add paragraph here..."></textarea>
+<button onclick="saveParagraph()">Save Paragraph</button>
+
+<div id="paragraphBox" class="box"></div>
+<div id="typingBox" class="box" contenteditable="true"></div>
+
+</div>
+
+<script>
+    let words = [];
+    let spans = [];
+    let wordIndex = 0;
+    
+    let typedWords = 0;
+    let correctWords = 0;
+    let typedChars = 0;
+    
+    let started = false;
+    let timeLeft, timer;
+    
+    const paraSelect = document.getElementById("paraSelect");
+    const paragraphBox = document.getElementById("paragraphBox");
+    const typingBox = document.getElementById("typingBox");
+    const timerEl = document.getElementById("timer");
+    
+    function loadParagraphs() {
+        paraSelect.innerHTML = "";
+        const paras = JSON.parse(localStorage.getItem("paras") || "[]");
+        paras.forEach((p, i) => {
+            const o = document.createElement("option");
+            o.value = p;
+            o.textContent = "Paragraph " + (i + 1);
+            paraSelect.appendChild(o);
+        });
+    }
+    
+    function saveParagraph() {
+        const t = paraInput.value.trim();
+        if (!t) return alert("Enter paragraph");
+        const paras = JSON.parse(localStorage.getItem("paras") || "[]");
+        paras.push(t);
+        localStorage.setItem("paras", JSON.stringify(paras));
+        paraInput.value = "";
+        loadParagraphs();
+    }
+    
+    function renderParagraph() {
+        paragraphBox.innerHTML = "";
+        spans = [];
+        words.forEach((w, i) => {
+            const s = document.createElement("span");
+            s.textContent = w + " ";
+            if (i === 0) s.classList.add("current");
+            paragraphBox.appendChild(s);
+            spans.push(s);
+        });
+    }
+    
+    function startTest() {
+        const para = paraSelect.value;
+        if (!para) return alert("Select paragraph");
+    
+        words = para.split(/\s+/);
+        renderParagraph();
+    
+        typingBox.innerHTML = "";
+        typingBox.focus();
+    
+        wordIndex = 0;
+        typedWords = correctWords = typedChars = 0;
+        started = false;
+    
+        timeLeft = document.getElementById("timeSelect").value * 60;
+        updateTimer();
+    }
+    
+    typingBox.addEventListener("keydown", e => {
+    
+        if (!words.length) return;
+    
+        if (!started) {
+            started = true;
+            timer = setInterval(tick, 1000);
+        }
+    
+        if (e.key === "Backspace") {
+            e.preventDefault(); // 🔒 no backspace after locking
+            return;
+        }
+    
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+            e.preventDefault();
+            return;
+        }
+    
+        if (e.key === " ") {
+            e.preventDefault();
+            lockWord();
+            return;
+        }
+    
+        if (e.key.length === 1) {
+            typedChars++;
+        }
+    });
+    
+    function lockWord() {
+        const currentText = typingBox.textContent.trimEnd();
+        const lastWord = currentText.split(/\s+/).pop() || "";
+        const expected = words[wordIndex] || "";
+    
+        if (lastWord === expected) {
+            typingBox.appendChild(document.createTextNode(lastWord + " "));
+            correctWords++;
+        } else {
+            const span = document.createElement("span");
+            span.className = "wrong";
+            span.textContent = lastWord + " ";
+            typingBox.appendChild(span);
+        }
+    
+        typedWords++;
+    
+        spans[wordIndex]?.classList.remove("current");
+        wordIndex++;
+        spans[wordIndex]?.classList.add("current");
+    
+        placeCaretEnd();
+    }
+    
+    function placeCaretEnd() {
+        const r = document.createRange();
+        const s = window.getSelection();
+        r.selectNodeContents(typingBox);
+        r.collapse(false);
+        s.removeAllRanges();
+        s.addRange(r);
+    }
+    
+    function tick() {
+        timeLeft--;
+        updateTimer();
+    
+        if (timeLeft <= 0) {
+            clearInterval(timer);
+            const minutes = Number(timeSelect.value);
+            const gross = Math.round((typedChars / 5) / minutes);
+            const net = Math.round(correctWords / minutes);
+            const accuracy = typedWords
+                ? Math.round((correctWords / typedWords) * 100)
+                : 0;
+    
+            alert(
+                `Test Completed\n\n` +
+                `Gross Speed: ${gross} WPM\n` +
+                `Net Speed: ${net} WPM\n` +
+                `Accuracy: ${accuracy}%`
+            );
+        }
+    }
+    
+    function updateTimer() {
+        const m = String(Math.floor(timeLeft / 60)).padStart(2, "0");
+        const s = String(timeLeft % 60).padStart(2, "0");
+        timerEl.textContent = `Time: ${m}:${s}`;
+    }
+    
+    loadParagraphs();
+    </script>
+    
+
+</body>
+</html>
