@@ -146,15 +146,18 @@
     <div class="card" style="text-align: left; cursor: default; max-width: 500px; margin: 0 auto;">
         <h2>Exam Config</h2>
         <label>Paragraph Selection</label>
-        <select id="paraSelect"></select>
+        <div style="display:flex;gap:8px;">
+          <select id="paraSelect" style="flex:1;"></select>
+          <button class="nav-btn" onclick="deleteSelectedParagraph()" style="background:var(--danger);border-color:var(--danger);">Delete</button>
+        </div>
         <label>Time Duration</label>
         <select id="timeSelect">
-    <option value="1">1 Minute</option>
-    <option value="2">2 Minutes</option>
-    <option value="5">5 Minutes</option>
-    <option value="10">10 Minutes</option>   <!-- NEW -->
-    <option value="15">15 Minutes</option>   <!-- NEW -->
-</select>
+            <option value="1">1 Minute</option>
+            <option value="2">2 Minutes</option>
+            <option value="5">5 Minutes</option>
+            <option value="10">10 Minutes</option>
+            <option value="15">15 Minutes</option>
+        </select>
         <button class="btn-main" onclick="startExam()">Start Test</button>
     </div>
 </div>
@@ -217,6 +220,17 @@ function saveParagraph() {
     showScreen('homeScreen');
 }
 
+function deleteSelectedParagraph() {
+    const sel = document.getElementById("paraSelect");
+    const idx = sel.selectedIndex;
+    if (idx < 0) return;
+    if (!confirm("Delete this paragraph?")) return;
+    const paras = JSON.parse(localStorage.getItem("paras") || "[]");
+    paras.splice(idx, 1);
+    localStorage.setItem("paras", JSON.stringify(paras));
+    loadParaList();
+}
+
 function loadParaList() {
     const defaultP = "This layout ensures your focus remains vertical. The paragraph is above and your typing area is directly below with synchronized width.";
     const paras = JSON.parse(localStorage.getItem("paras") || "[]");
@@ -271,6 +285,12 @@ function processWord(typed) {
     document.getElementById(`p-${wordIndex}`).classList.remove("current");
     wordIndex++;
     
+    /* ----- auto-finish if we just typed the last word ----- */
+    if (wordIndex === words.length) {
+        finishExam(true);   // true = use actual elapsed time
+        return;
+    }
+    
     if(wordIndex < words.length) {
         const next = document.getElementById(`p-${wordIndex}`);
         next.className = "current";
@@ -279,17 +299,18 @@ function processWord(typed) {
     }
 }
 
-function tick() { timeLeft--; updateTimerUI(); if(timeLeft <= 0) finishExam(); }
+function tick() { timeLeft--; updateTimerUI(); if(timeLeft <= 0) finishExam(false); }
 function updateTimerUI() {
     const m = String(Math.floor(timeLeft/60)).padStart(2,"0");
     const s = String(timeLeft%60).padStart(2,"0");
     document.getElementById("timerDisplay").textContent = `${m}:${s}`;
 }
 
-function finishExam() {
+function finishExam(useRealTime = false) {
     clearInterval(timer);
-    const gross = ((totalChars / 5) / totalTimeSet).toFixed(2);
-    const net = (gross - (errors / totalTimeSet)).toFixed(2);
+    const elapsedMin = useRealTime ? (totalTimeSet * 60 - timeLeft) / 60 : totalTimeSet;
+    const gross = ((totalChars / 5) / elapsedMin).toFixed(2);
+    const net = (gross - (errors / elapsedMin)).toFixed(2);
     document.getElementById("resGross").innerText = gross;
     document.getElementById("resErrors").innerText = errors;
     document.getElementById("resNet").innerText = net < 0 ? "0.00" : net;
